@@ -34,11 +34,15 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 # Internal port — must match docker-compose and NGINX proxy_pass
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
+
+# OpenSSL is required by the Prisma query engine binary on Alpine
+RUN apk add --no-cache openssl
 
 # Non-root user — principle of least privilege
 RUN addgroup --system --gid 1001 nodejs \
