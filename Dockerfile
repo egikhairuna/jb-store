@@ -68,7 +68,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma  ./node_modu
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma    ./node_modules/prisma
 
 # SQLite data directory — permissions for volume mount
-RUN mkdir -p /app/prisma && chown nextjs:nodejs /app/prisma
+RUN mkdir -p /app/prisma/db && chown -R nextjs:nodejs /app/prisma
 
 # Entrypoint: detects corrupt migration state, re-migrates, verifies, then starts
 COPY --chown=nextjs:nodejs entrypoint.sh ./entrypoint.sh

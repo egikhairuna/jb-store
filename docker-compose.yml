@@ -17,14 +17,14 @@ services:
       - .env.production               # created on server, never committed to git
     environment:
       NODE_ENV: production
-      # DATABASE_URL is always the in-container path, regardless of env_file content
-      DATABASE_URL: "file:/app/prisma/pos.db"
+      # DATABASE_URL is now in a subfolder so the volume mount doesn't hide migrations
+      DATABASE_URL: "file:/app/prisma/db/pos.db"
       PORT: "3001"
 
     # ── Volumes ────────────────────────────────────────────────
     volumes:
-      # SQLite database persisted across container rebuilds/restarts
-      - sqlite_data:/app/prisma
+      # SQLite database persisted in a subfolder
+      - sqlite_data:/app/prisma/db
 
     # ── Network ────────────────────────────────────────────────
     networks:

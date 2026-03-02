@@ -6,6 +6,14 @@ set -e
 DB_PATH="${DATABASE_URL#file:}"   # strip "file:" prefix → /app/prisma/pos.db
 PRISMA="node node_modules/prisma/build/index.js"
 
+# ── Ensure database directory exists ───────────────────────────
+# If the volume is mounted to a subfolder, we must ensure it exists
+# and is writable by the nextjs user.
+DB_DIR=$(dirname "$DB_PATH")
+if [ ! -d "$DB_DIR" ]; then
+  mkdir -p "$DB_DIR"
+fi
+
 echo "==> Checking database at: $DB_PATH"
 
 # ── Ensure migrations exist ──────────────────────────────────────
