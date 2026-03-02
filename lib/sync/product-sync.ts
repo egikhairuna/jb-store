@@ -1,7 +1,8 @@
 import api from "@/lib/woocommerce";
 import { prisma } from "@/lib/prisma";
 import { syncLockService } from "../sync-lock";
-import { Product as LocalProduct } from "@prisma/client";
+import { syncConfig } from "../sync-config";
+import { fetchWithExponentialBackoff } from "./sync-utils";
 
 /**
  * Ultimate Product Sync Strategy
@@ -19,30 +20,40 @@ export async function syncWooCommerceProductsIncremental() {
   const startTime = Date.now();
   
   const log = (msg: string) => {
-    console.log(`[${new Date().toLocaleTimeString()}] [IncrementalSync] [${syncId}] ${msg}`);
+    console.log(`[${new Date().toLocaleTimeString()}] [ProductSync] [${syncId}] ${msg}`);
   };
 
   try {
+    log('Starting incremental product sync...');
+
     // 1. Get last sync time
     const syncLock = await prisma.syncLock.findUnique({ where: { id: 'products' } });
     const lastSyncedAt = syncLock?.lastSyncedAt;
     
-    log(lastSyncedAt ? `Checking for updates since ${lastSyncedAt.toISOString()}` : "No previous sync found. Performing initial full sync.");
+    log(lastSyncedAt ? `Checking for updates since ${lastSyncedAt.toISOString()}` : "No previous sync found. Performing initial sync.");
 
     // 2. Fetch modified products from WooCommerce
     let page = 1;
-    const perPage = 100;
+    const perPage = syncConfig.wcProductPerPage;
     let totalUpdated = 0;
     const modifiedAfter = lastSyncedAt ? lastSyncedAt.toISOString() : undefined;
 
+    // Define fields we actually use to reduce WC payload (40+ fields -> 9)
+    const productFields = "id,name,sku,type,price,images,manage_stock,stock_quantity,variations,date_modified";
+    const variationFields = "id,sku,price,manage_stock,stock_quantity,attributes";
+
     while (true) {
       log(`Fetching page ${page}...`);
-      const response = await api.get("products", {
-        page,
-        per_page: perPage,
-        status: "any",
-        ...(modifiedAfter && { after: modifiedAfter })
-      });
+      
+      const response = await fetchWithExponentialBackoff(`Fetch page ${page}`, () => 
+        api.get("products", {
+          page,
+          per_page: perPage,
+          status: "any", // Private products are required per user constraint
+          _fields: productFields,
+          ...(modifiedAfter && { after: modifiedAfter })
+        })
+      );
 
       const products = response.data || [];
       if (products.length === 0) break;
@@ -55,7 +66,15 @@ export async function syncWooCommerceProductsIncremental() {
         let variantsJson: string | null = null;
         if (p.type === 'variable') {
           try {
-            const vResp = await api.get(`products/${p.id}/variations`, { per_page: 100 });
+            log(`Fetching variations for product ${p.id} (${p.sku || 'No SKU'})...`);
+            
+            const vResp = await fetchWithExponentialBackoff(`Fetch variations for ${p.id}`, () =>
+              api.get(`products/${p.id}/variations`, { 
+                per_page: 100,
+                _fields: variationFields
+              })
+            );
+
             const variants = vResp.data.map((v: any) => ({
               id: String(v.id),
               name: v.attributes.map((a: any) => a.option).join(", ") || "Default",
@@ -64,8 +83,8 @@ export async function syncWooCommerceProductsIncremental() {
               sku: v.sku || `WC-VAR-${v.id}`,
             }));
             variantsJson = JSON.stringify(variants);
-          } catch (e) {
-            log(`Warning: Failed to fetch variants for product ${p.id}`);
+          } catch (e: any) {
+            log(`Warning: Failed to fetch variants for product ${p.id}: ${e.message}`);
           }
         }
 
@@ -103,7 +122,7 @@ export async function syncWooCommerceProductsIncremental() {
     const duration = Date.now() - startTime;
     log(`✅ Incremental sync completed. ${totalUpdated} products updated in ${(duration / 1000).toFixed(1)}s`);
 
-    return { success: true, count: totalUpdated, duration };
+    return { success: true, count: totalUpdated, duration, syncId };
 
   } catch (error: any) {
     log(`❌ Incremental sync failed: ${error.message}`);

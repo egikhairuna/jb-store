@@ -7,6 +7,10 @@
 import api from "@/lib/woocommerce";
 import { Product, Order } from "@/lib/store";
 import { syncLockService } from "./sync-lock";
+import { syncConfig } from "./sync-config";
+import { syncWooCommerceProductsIncremental } from "./sync/product-sync";
+import { prisma } from "./prisma";
+import { fetchWithExponentialBackoff } from "./sync/sync-utils";
 
 interface SyncResult<T> {
   success: boolean;
@@ -18,161 +22,70 @@ interface SyncResult<T> {
 
 /**
  * Sync products from WooCommerce
- * This is a heavy, long-running operation
+ * REDIRECTED: Now runs the optimized incremental sync and returns data from local SQLite DB.
+ * This preserves the API contract for the frontend while eliminating 400-600% CPU spikes.
  */
 export async function syncWooCommerceProducts(): Promise<SyncResult<Product[]>> {
-  const lockResult = await syncLockService.acquireLock('products');
-  
-  if (!lockResult.success) {
-    return {
-      success: false,
-      error: lockResult.message
-    };
-  }
-
-  const { syncId } = lockResult;
   const startTime = Date.now();
   
-  const log = (msg: string) => {
-    console.log(`[${new Date().toLocaleTimeString()}] [ProductSync] [${syncId}] ${msg}`);
-  };
-
   try {
-    log('Starting product sync...');
+    console.log(`[${new Date().toLocaleTimeString()}] [SyncService] Starting redirected product sync...`);
     
-    // Helper function for retry logic
-    const fetchWithRetry = async (fn: () => Promise<any>, retries = 3): Promise<any> => {
-      try {
-        return await fn();
-      } catch (error: any) {
-        if (retries === 0) throw error;
-        log(`Retry failed, ${retries} attempts remaining...`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return fetchWithRetry(fn, retries - 1);
-      }
-    };
+    // 1. Trigger the hardened incremental sync
+    const syncResult = await syncWooCommerceProductsIncremental();
     
-    // Fetch all products with pagination - DETERMINISTIC
-    let page = 1;
-    const perPage = 100;
-    let allProducts: any[] = [];
-
-    while (true) {
-      const response = await fetchWithRetry(() => 
-        api.get("products", {
-          page,
-          per_page: perPage,
-          status: "any", // ✅ FETCH ALL STATUSES (publish, draft, private, pending)
-        })
-      );
-
-      const fetchedCount = response.data?.length || 0;
-      log(`Page ${page} → ${fetchedCount} products`);
-
-      // Stop only when response is empty
-      if (!response.data || response.data.length === 0) {
-        break;
-      }
-
-      allProducts.push(...response.data);
-      page++;
+    if (!syncResult.success) {
+      return {
+        success: false,
+        error: syncResult.error,
+        duration: Date.now() - startTime
+      };
     }
 
-    log(`Total fetched: ${allProducts.length} products`);
+    // 2. Fetch all products from local SQLite to return to the client
+    // This satisfies the API contract of Returning the full product list for store hydration
+    const dbProducts = await prisma.product.findMany({
+      orderBy: { name: 'asc' }
+    });
 
-    // Process in batches
-    const BATCH_SIZE = 10;
-    const mappedProducts: Product[] = [];
-
-    for (let i = 0; i < allProducts.length; i += BATCH_SIZE) {
-      const batch = allProducts.slice(i, i + BATCH_SIZE);
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(allProducts.length / BATCH_SIZE);
-      
-      log(`Processing batch ${batchNum}/${totalBatches}...`);
-      
-      const batchResults = await Promise.all(batch.map(async (p: any) => {
-        const product: Product = {
-          id: String(p.id),
-          name: p.name,
-          price: p.price ? parseFloat(p.price) : 0,
-          stock: p.manage_stock ? (p.stock_quantity ?? 0) : 100,
-          sku: p.sku || `WC-${p.id}`,
-          type: p.type === 'variable' ? 'variable' : 'simple',
-          image: p.images && p.images.length > 0 ? p.images[0].src : undefined,
-          variants: [],
-        };
-
-        if (product.type === 'variable') {
-          try {
-            const variantsResponse = await fetchWithRetry(() =>
-              api.get(`products/${product.id}/variations`, {
-                per_page: 50
-              })
-            );
-            
-            product.variants = variantsResponse.data.map((v: any) => ({
-              id: String(v.id),
-              name: v.attributes.map((a: any) => a.option).join(", ") || "Variant",
-              price: v.price ? parseFloat(v.price) : 0,
-              stock: v.manage_stock ? (v.stock_quantity ?? 0) : 0,
-              sku: v.sku || `WC-VAR-${v.id}`
-            }));
-          } catch (error: any) {
-            log(`Warning: Failed to fetch variants for product ${product.id}: ${error.message}`);
-          }
-        }
-
-        return product;
-      }));
-
-      mappedProducts.push(...batchResults);
-      
-      // Small delay between batches
-      if (i + BATCH_SIZE < allProducts.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
+    const mappedProducts: Product[] = dbProducts.map(p => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      stock: p.stock,
+      sku: p.sku || `WC-${p.id}`,
+      type: p.type === 'variable' ? 'variable' : 'simple',
+      image: p.image || undefined,
+      variants: p.variants ? JSON.parse(p.variants) : [],
+    }));
 
     const duration = Date.now() - startTime;
-    
-    // ✅ HARD VALIDATION: Fail loudly if incomplete
-    if (mappedProducts.length !== allProducts.length) {
-      const errorMsg = `INCOMPLETE SYNC: Fetched ${allProducts.length} products but only processed ${mappedProducts.length}`;
-      log(`ERROR: ${errorMsg}`);
-      throw new Error(errorMsg);
-    }
-    
-    log(`✅ Sync completed successfully. ${mappedProducts.length} products processed in ${(duration / 1000).toFixed(1)}s`);
+    console.log(`[SyncService] ✅ Redirected sync success. Served ${mappedProducts.length} items from DB in ${(duration / 1000).toFixed(1)}s`);
 
     return {
       success: true,
       data: mappedProducts,
-      syncId,
-      duration
+      duration,
+      syncId: syncResult.syncId
     };
 
   } catch (error: any) {
-    const duration = Date.now() - startTime;
-    log(`Sync failed after ${(duration / 1000).toFixed(1)}s: ${error.message}`);
-    
+    console.error(`[SyncService] ❌ Redirected sync failed: ${error.message}`);
     return {
       success: false,
-      error: error.message || 'Unknown error occurred',
-      syncId,
-      duration
+      error: error.message,
+      duration: Date.now() - startTime
     };
-  } finally {
-    if (syncId) await syncLockService.releaseLock('products', syncId);
   }
 }
 
 /**
  * Sync orders from WooCommerce
+ * HARDENED: Added _fields filtering and capped perPage to reduce load.
  */
 export async function syncWooCommerceOrders(
   page: number = 1,
-  perPage: number = 100,
+  perPage: number = 50,
   status: string = 'completed',
   after?: string
 ): Promise<SyncResult<Order[]>> {
@@ -187,30 +100,34 @@ export async function syncWooCommerceOrders(
 
   const { syncId } = lockResult;
   const startTime = Date.now();
+  const finalPerPage = Math.min(perPage, syncConfig.wcOrderPerPage);
   
   const log = (msg: string) => {
     console.log(`[${new Date().toLocaleTimeString()}] [OrderSync] [${syncId}] ${msg}`);
   };
 
   try {
-    log(`Fetching orders (page ${page}, status: ${status}, after: ${after || 'initial'})...`);
+    log(`Fetching orders (page ${page}, per_page: ${finalPerPage}, status: ${status}, after: ${after || 'initial'})...`);
     
     const params: any = {
-      per_page: perPage,
+      per_page: finalPerPage,
       page,
       status,
+      _fields: "id,date_created,total,total_tax,discount_total,payment_method_title,line_items,meta_data,status"
     };
 
     if (after) {
       params.after = after;
     }
 
-    const response = await api.get("orders", params);
+    const response = await fetchWithExponentialBackoff(`Fetch orders page ${page}`, () => 
+      api.get("orders", params)
+    );
 
-    const orders: Order[] = response.data.map((order: any) => ({
+    const orders: Order[] = (response.data || []).map((order: any) => ({
       id: String(order.id),
       date: order.date_created,
-      items: order.line_items.map((item: any) => ({
+      items: (order.line_items || []).map((item: any) => ({
         id: String(item.product_id),
         name: item.name,
         price: item.price ? parseFloat(item.price) : 0,
@@ -221,13 +138,13 @@ export async function syncWooCommerceOrders(
         variantId: item.variation_id ? String(item.variation_id) : undefined,
         variantName: item.meta_data?.find((m: any) => m.key === 'pa_color' || m.key === 'pa_size')?.value || '',
       })),
-      total: parseFloat(order.total),
-      subtotal: parseFloat(order.total) - parseFloat(order.total_tax),
-      tax: parseFloat(order.total_tax),
-      discount: parseFloat(order.discount_total),
+      total: parseFloat(order.total || "0"),
+      subtotal: parseFloat(order.total || "0") - parseFloat(order.total_tax || "0"),
+      tax: parseFloat(order.total_tax || "0"),
+      discount: parseFloat(order.discount_total || "0"),
       paymentMethod: order.payment_method_title,
-      isPosOrder: order.meta_data.some((m: any) => m.key === 'pos_order_id'),
-      posOrderId: order.meta_data.find((m: any) => m.key === 'pos_order_id')?.value
+      isPosOrder: order.meta_data?.some((m: any) => m.key === 'pos_order_id'),
+      posOrderId: order.meta_data?.find((m: any) => m.key === 'pos_order_id')?.value
     }));
 
     const duration = Date.now() - startTime;

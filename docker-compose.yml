@@ -20,6 +20,7 @@ services:
       # DATABASE_URL is now in a subfolder so the volume mount doesn't hide migrations
       DATABASE_URL: "file:/app/prisma/db/pos.db"
       PORT: "3001"
+      AUTH_TRUST_HOST: "true"
 
     # ── Volumes ────────────────────────────────────────────────
     volumes:

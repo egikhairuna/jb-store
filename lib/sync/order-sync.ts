@@ -1,7 +1,7 @@
 import api from "@/lib/woocommerce";
 import { prisma } from "@/lib/prisma";
 import { syncLockService } from "../sync-lock";
-// Note: syncStatus is a String field in schema.prisma (not an enum), so no SyncStatus import needed.
+import { fetchWithExponentialBackoff } from "./sync-utils";
 
 /**
  * Background Order Retry Worker
@@ -42,13 +42,16 @@ export async function retryFailedOrders() {
         log(`Retrying order ${order.posOrderId}...`);
 
         // 2. IDEMPOTENCY CHECK: Search WooCommerce first
-        const searchResp = await api.get("orders", {
+        const searchResp = await fetchWithExponentialBackoff(`Idempotency check for ${order.posOrderId}`, () =>
+          api.get("orders", {
             search: order.posOrderId,
-            per_page: 1
-        });
+            per_page: 1,
+            _fields: "id,meta_data"
+          })
+        );
 
         // WooCommerce search is broad, verify metadata
-        let existingOrder = searchResp.data.find((o: any) => 
+        let existingOrder = (searchResp.data || []).find((o: any) => 
             o.meta_data.some((m: any) => m.key === 'pos_order_id' && m.value === order.posOrderId)
         );
 
@@ -66,6 +69,7 @@ export async function retryFailedOrders() {
         }
 
         // 3. Re-attempt Creation
+        log(`Creating record in WooCommerce for POS order ${order.posOrderId}...`);
         const cartItems = JSON.parse(order.items as string);
         const wcOrderData = {
             payment_method: order.paymentMethod,
@@ -82,7 +86,9 @@ export async function retryFailedOrders() {
             ],
         };
 
-        const createResp = await api.post("orders", wcOrderData);
+        const createResp = await fetchWithExponentialBackoff(`Create order ${order.posOrderId}`, () =>
+          api.post("orders", wcOrderData)
+        );
         
         if (createResp.status === 201) {
             log(`Successfully created WooCommerce order #${createResp.data.id} for ${order.posOrderId}.`);

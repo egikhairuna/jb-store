@@ -183,7 +183,7 @@ export default function LoginPage() {
       {/* Screen Footer */}
       <div className="absolute bottom-6 w-full text-center z-10 px-4">
         <p className="text-[10px] text-white/30 uppercase font-medium">
-          © {new Date().getFullYear()} James Boogie • Woocommerce Based POS • v1.0.0
+          © {new Date().getFullYear()} James Boogie • Woocommerce Based POS • v1.0.0 BY Alghifari Khairuna 
         </p>
       </div>
     </div>
