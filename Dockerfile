@@ -70,10 +70,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma    ./node_mod
 # SQLite data directory — permissions for volume mount
 RUN mkdir -p /app/prisma && chown nextjs:nodejs /app/prisma
 
+# Entrypoint: detects corrupt migration state, re-migrates, verifies, then starts
+COPY --chown=nextjs:nodejs entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3001
 
-# Invoke prisma CLI via its real entry point so __dirname resolves correctly
-# to node_modules/prisma/build/ where the .wasm files live.
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+# Self-healing entrypoint: detects corrupt DB → wipes → migrates → verifies → starts
+CMD ["sh", "entrypoint.sh"]
