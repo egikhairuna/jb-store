@@ -9,6 +9,8 @@ const api = new WooCommerceRestApi({
   consumerKey: wcConfig.consumerKey,
   consumerSecret: wcConfig.consumerSecret,
   version: "wc/v3",
+  // @ts-ignore - queryString exists but may be missing from types
+  queryString: true, // Force using query string for authentication
 });
 
 export default api;
