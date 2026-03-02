@@ -37,12 +37,16 @@ export function BarcodeSidebar() {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState("")
 
+  type SearchItem =
+    | { id: string; type: "product"; name: string; sku: string; product: Product }
+    | { id: string; type: "variant"; name: string; sku: string; product: Product; variant: NonNullable<Product["variants"]>[number] }
+
   /**
    * Flatten products for search:
    * - Simple products
    * - Variants
    */
-  const searchItems = products.flatMap((p) => {
+  const searchItems = products.flatMap((p): SearchItem[] => {
     if (p.type === "simple") {
       return [
         {
@@ -63,7 +67,7 @@ export function BarcodeSidebar() {
         sku: v.sku,
         product: p,
         variant: v,
-      })) || []
+      })) ?? []
     )
   })
 

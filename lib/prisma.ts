@@ -31,6 +31,9 @@ function makePrismaClient(): PrismaClient {
         : ["error"],
   });
 
+  // Some PRAGMAs (journal_mode, synchronous, mmap_size, busy_timeout,
+  // wal_autocheckpoint) return a result row in SQLite.
+  // $executeRawUnsafe rejects any query that returns rows — use $queryRawUnsafe instead.
   const pragmas = [
     "PRAGMA journal_mode = WAL",
     "PRAGMA synchronous = NORMAL",
@@ -42,7 +45,7 @@ function makePrismaClient(): PrismaClient {
   ];
 
   for (const pragma of pragmas) {
-    client.$executeRawUnsafe(pragma).catch((e) =>
+    client.$queryRawUnsafe(pragma).catch((e: Error) =>
       console.error(`[Prisma] Failed to apply PRAGMA "${pragma}": ${e.message}`)
     );
   }
