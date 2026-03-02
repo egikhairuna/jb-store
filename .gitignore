@@ -39,3 +39,27 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/lib/generated/prisma
+
+# SQLite database files (contain real user data — never commit)
+prisma/*.db
+prisma/*.db-shm
+prisma/*.db-wal
+
+# Debug / build log files generated during development
+build_output.txt
+debug_log.txt
+ts-errors.txt
+migrate-log.txt
+migration_log.txt
+prisma-error.txt
+prisma-migrate-log.txt
+prisma_gen_out.txt
+prisma_gen_out_v2.txt
+prisma_val_out.txt
+seed_log.txt
+seed_out.txt
+
+# Shell scripts containing server-specific paths (not portable)
+/scripts/

@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth (required by Auth.js Prisma Adapter) ──────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  username      String?   @unique // short login handle e.g. "cashier1"
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?   // bcrypt hash
+  role          String    @default("CASHIER")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts  Account[]
+  sessions  Session[]
+  orders    Order[]
+  auditLogs AuditLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── POS Domain Models ───────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id // WooCommerce ID
+  name        String
+  price       Float
+  stock       Int
+  sku         String?
+  type        String   // simple, variable
+  image       String?
+  variants    String?    // Array of Variant objects
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sku])
+}
+
+model Order {
+  id             String     @id @default(cuid())
+  posOrderId     String     @unique // human-readable ID (e.g. "A1B2C3D4E")
+  wcOrderId      String?             // WooCommerce order ID once synced
+  cashierId      String
+  cashier        User       @relation(fields: [cashierId], references: [id])
+  items          String     // ✅ Changed to String for SQLite compatibility
+  subtotal       Float
+  discountAmount Float      @default(0)
+  taxAmount      Float      @default(0)
+  total          Float
+  paymentMethod  String
+  syncStatus     String     @default("PENDING")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  action    String   // "ORDER_CREATED" | "LOGIN" | "SYNC_TRIGGERED" | "DISCOUNT_APPLIED"
+  details   String?    // ✅ Changed to String for SQLite compatibility
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model SyncLock {
+  id           String    @id // "products" | "orders"
+  isLocked     Boolean   @default(false)
+  syncId       String?
+  lockedAt     DateTime?
+  lastSyncedAt DateTime? // ✅ For incremental sync
+  updatedAt    DateTime  @updatedAt
+}
+
