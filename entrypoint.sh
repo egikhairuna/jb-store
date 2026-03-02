@@ -8,6 +8,13 @@ PRISMA="node node_modules/prisma/build/index.js"
 
 echo "==> Checking database at: $DB_PATH"
 
+# ── Ensure migrations exist ──────────────────────────────────────
+if [ ! -d "prisma/migrations" ]; then
+  echo "==> ERROR: prisma/migrations folder not found inside container!"
+  exit 1
+fi
+echo "==> Migrations folder found."
+
 # ── Detect corrupt migration state ─────────────────────────────
 # If the DB exists but is missing the User table, a previous run crashed
 # mid-migration (schema engine recorded migrations without running SQL).

@@ -41,8 +41,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
-# OpenSSL is required by the Prisma query engine binary on Alpine
-RUN apk add --no-cache openssl
+# OpenSSL and libc6-compat are required by the Prisma query engine binary on Alpine
+RUN apk add --no-cache openssl libc6-compat
 
 # Non-root user — principle of least privilege
 RUN addgroup --system --gid 1001 nodejs \
