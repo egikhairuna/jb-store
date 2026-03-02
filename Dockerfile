@@ -57,10 +57,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma  ./node_modu
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma  ./node_modules/@prisma
 
 # ── Prisma CLI v5 (the project-local version) ──────────────────
-# Copying the local prisma CLI ensures `migrate deploy` at boot uses
-# prisma@5.22.0 and never accidentally picks up any global version.
+# Copy the full prisma package — the WASM files live here alongside the JS.
+# Do NOT copy node_modules/.bin/prisma: Docker resolves the symlink to its
+# target file, whose __dirname becomes /app/node_modules/.bin/ and cannot
+# find the sibling .wasm files. Call the real entry point directly instead.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma    ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 # SQLite data directory — permissions for volume mount
 RUN mkdir -p /app/prisma && chown nextjs:nodejs /app/prisma
@@ -69,5 +70,6 @@ USER nextjs
 
 EXPOSE 3001
 
-# Use the LOCAL prisma CLI binary — never the system/global version
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node server.js"]
+# Invoke prisma CLI via its real entry point so __dirname resolves correctly
+# to node_modules/prisma/build/ where the .wasm files live.
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
