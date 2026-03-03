@@ -140,16 +140,26 @@ export async function syncWooCommerceOrdersIncremental() {
     try {
       log('Starting incremental order sync (Pull from WooCommerce)...');
   
+      // 0. CLEANUP: Remove legacy prefixed IDs to prevent duplicates in UI
+      // These became orphaned when we switched ID format
+      const legacyResult = await prisma.order.deleteMany({
+          where: { posOrderId: { startsWith: 'WC-ONLINE-' } }
+      });
+      if (legacyResult.count > 0) {
+          log(`Legacy Cleanup: Removed ${legacyResult.count} old prefixed orders.`);
+      }
+
       // 1. Get last sync time
       const syncLock = await prisma.syncLock.findUnique({ where: { id: 'orders' } });
       const lastSyncedAt = syncLock?.lastSyncedAt;
       
       // 2. Determine threshold for modified_after
-      // If we've never synced, bootstrap with the hot window start
+      // If we've never synced OR if we just cleaned up legacy records, 
+      // bootstrap with the full hot window start to restore missing orders
       const hotWindowStart = subMonths(new Date(), syncConfig.orderHotWindowMonths);
-      const modifiedAfter = lastSyncedAt || hotWindowStart;
+      const modifiedAfter = (lastSyncedAt && legacyResult.count === 0) ? lastSyncedAt : hotWindowStart;
       
-      log(`Checking for modified/new orders since ${modifiedAfter.toISOString()}`);
+      log(`Checking for modified/new orders since ${modifiedAfter.toISOString()} ${legacyResult.count > 0 ? '(Forced Refresh Due to Legacy Change)' : ''}`);
   
       // 3. Find a fallback user for online orders (mandatory per schema)
       const defaultUser = await prisma.user.findFirst({
@@ -189,6 +199,7 @@ export async function syncWooCommerceOrdersIncremental() {
         for (const o of orders) {
           const posOrderId = o.meta_data?.find((m: any) => m.key === 'pos_order_id')?.value;
           const subtotal = parseFloat(o.total || "0") - parseFloat(o.total_tax || "0");
+          const wcDate = new Date(o.date_created || new Date());
           
           const orderData = {
             wcOrderId: String(o.id),
@@ -199,6 +210,7 @@ export async function syncWooCommerceOrdersIncremental() {
             total: parseFloat(o.total || "0"),
             paymentMethod: o.payment_method_title || o.payment_method || 'unknown',
             syncStatus: 'SYNCED',
+            createdAt: wcDate, // Preserve Original WC Date
             updatedAt: new Date(o.date_modified || o.date_created),
           };
   
