@@ -186,7 +186,7 @@ export async function syncWooCommerceOrdersIncremental() {
       const perPage = syncConfig.wcOrderPerPage;
       let totalUpdated = 0;
       
-      const orderFields = "id,date_created,date_modified,total,total_tax,discount_total,payment_method,payment_method_title,line_items,meta_data,status";
+      const orderFields = "id,date_created_gmt,date_modified_gmt,total,total_tax,discount_total,payment_method,payment_method_title,line_items,meta_data,status";
   
       while (true) {
         log(`Fetching page ${page}...`);
@@ -209,7 +209,7 @@ export async function syncWooCommerceOrdersIncremental() {
         for (const o of orders) {
           const posOrderId = o.meta_data?.find((m: any) => m.key === 'pos_order_id')?.value;
           const subtotal = parseFloat(o.total || "0") - parseFloat(o.total_tax || "0");
-          const wcDate = new Date(o.date_created || new Date());
+          const wcDate = new Date((o.date_created_gmt || o.date_created || new Date().toISOString()) + "Z");
           
           const orderData = {
             wcOrderId: String(o.id),
@@ -220,8 +220,8 @@ export async function syncWooCommerceOrdersIncremental() {
             total: parseFloat(o.total || "0"),
             paymentMethod: o.payment_method_title || o.payment_method || 'unknown',
             syncStatus: 'SYNCED',
-            createdAt: wcDate, // Preserve Original WC Date
-            updatedAt: new Date(o.date_modified || o.date_created),
+            createdAt: wcDate, // Preserve Original WC Date (Explicit UTC)
+            updatedAt: new Date((o.date_modified_gmt || o.date_modified || o.date_created_gmt || o.date_created || new Date().toISOString()) + "Z"),
           };
   
           // online orders use WC ID directly, POS orders use their original human-readable ID

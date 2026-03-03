@@ -66,7 +66,7 @@ export async function getWooCommerceOrders(
 
         return response.data.map((order: any) => ({
             id: String(order.id),
-            date: order.date_created,
+            date: (order.date_created_gmt || order.date_created || new Date().toISOString()) + "Z",
             items: order.line_items.map((item: any) => ({
                 id: String(item.product_id),
                 name: item.name,
