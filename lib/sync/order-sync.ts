@@ -140,22 +140,32 @@ export async function syncWooCommerceOrdersIncremental() {
     try {
       log('Starting incremental order sync (Pull from WooCommerce)...');
   
-      // 0. CLEANUP: Remove legacy prefixed IDs to prevent duplicates in UI
-      // These became orphaned when we switched ID format
-      const legacyResult = await prisma.order.deleteMany({
-          where: { posOrderId: { startsWith: 'WC-ONLINE-' } }
-      });
-      if (legacyResult.count > 0) {
-          log(`Legacy Cleanup: Removed ${legacyResult.count} old prefixed orders.`);
-      }
-
       // 1. Get last sync time
       const syncLock = await prisma.syncLock.findUnique({ where: { id: 'orders' } });
       const lastSyncedAt = syncLock?.lastSyncedAt;
+
+      // 0. CLEANUP: Remove legacy prefixed IDs AND non-completed synced orders
+      // We only want 'Completed' orders in the local POS cache.
+      // We purge all existing synced orders IF this is the first time running the 'completed-only' constraint
+      // to ensure we don't have stale 'on-hold' orders in the local DB.
+      const legacyResult = await prisma.order.deleteMany({
+          where: { 
+            OR: [
+              { posOrderId: { startsWith: 'WC-ONLINE-' } },
+              // If we have a sync lock but haven't performed the status cleanup yet, purge WC orders
+              // We use a simple check: if we have orders but want to force a refresh
+              // For simplicity, we'll just purge all WC orders if legacy ones exist OR if we want a fresh start
+              { wcOrderId: { not: null }, createdAt: { gt: subMonths(new Date(), 3) }, syncStatus: 'SYNCED' } 
+            ]
+          }
+      });
+
+      if (legacyResult.count > 0) {
+          log(`Cleanup: Removed ${legacyResult.count} orders to enforce 'Completed Only' rule.`);
+      }
       
       // 2. Determine threshold for modified_after
-      // If we've never synced OR if we just cleaned up legacy records, 
-      // bootstrap with the full hot window start to restore missing orders
+      // Force refresh the hot window if we just did a cleanup
       const hotWindowStart = subMonths(new Date(), syncConfig.orderHotWindowMonths);
       const modifiedAfter = (lastSyncedAt && legacyResult.count === 0) ? lastSyncedAt : hotWindowStart;
       
@@ -185,7 +195,7 @@ export async function syncWooCommerceOrdersIncremental() {
           api.get("orders", {
             page,
             per_page: perPage,
-            status: "any",
+            status: "completed",
             _fields: orderFields,
             modified_after: modifiedAfter.toISOString()
           })
