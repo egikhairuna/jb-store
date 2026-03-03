@@ -47,13 +47,21 @@ export async function createWooCommerceOrder(orderData: any) {
     }
 }
 
-export async function getWooCommerceOrders(page: number = 1, per_page: number = 20, status: string = 'completed'): Promise<Order[]> {
+export async function getWooCommerceOrders(
+    page: number = 1, 
+    per_page: number = 20, 
+    status: string = 'completed',
+    after?: string,
+    before?: string
+): Promise<Order[]> {
     await requireRole(["ADMIN", "CASHIER"]); // 🔒
     try {
         const response = await api.get("orders", {
             per_page,
             page,
             status,
+            after,
+            before
         });
 
         return response.data.map((order: any) => ({

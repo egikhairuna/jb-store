@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns"
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subMonths } from "date-fns"
 import { Download, FileSpreadsheet, FileText, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import {
@@ -39,15 +39,31 @@ export default function ReportsPage() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [isHistoricalRange, setIsHistoricalRange] = useState(false)
 
-  // FETCH WC ORDERS (Global Refresh)
-  const fetchWCOrders = async () => {
+  // Tracking if current range is beyond hot window
+  useEffect(() => {
+    if (startDate) {
+        const start = parseISO(startDate)
+        const threeMonthsAgo = subMonths(new Date(), 3)
+        setIsHistoricalRange(start < threeMonthsAgo)
+    } else {
+        setIsHistoricalRange(false)
+    }
+  }, [startDate])
+
+  // FETCH WC ORDERS (For Historical Fallback)
+  const fetchHistoricalOrders = async () => {
       setIsLoading(true)
       try {
-        const remoteOrders = await getWooCommerceOrders(1, 100)
+        // Use user-selected threshold for direct WC query
+        const start = startDate ? startOfDay(parseISO(startDate)).toISOString() : undefined
+        const end = endDate ? endOfDay(parseISO(endDate)).toISOString() : undefined
+
+        const remoteOrders = await getWooCommerceOrders(1, 100, 'completed', start, end)
         setWCOrders(remoteOrders)
       } catch (error) {
-        console.error("Failed to fetch WC orders", error)
+        console.error("Failed to fetch historical orders", error)
       } finally {
         setIsLoading(false)
       }
@@ -222,6 +238,19 @@ export default function ReportsPage() {
                     className="w-[150px]"
                 />
             </div>
+
+            {/* Historical Fallback Button */}
+            {isHistoricalRange && (
+                <Button 
+                    variant="outline" 
+                    onClick={fetchHistoricalOrders} 
+                    disabled={isLoading}
+                    className="text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100"
+                >
+                    <Download className="mr-2 h-4 w-4" />
+                    Fetch History
+                </Button>
+            )}
 
             {/* Export Dropdown */}
             <DropdownMenu>

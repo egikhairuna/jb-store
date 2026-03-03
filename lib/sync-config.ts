@@ -11,6 +11,7 @@ export const syncConfig = {
   // WooCommerce API pagination limits
   wcProductPerPage: Number(process.env.WC_PRODUCT_PER_PAGE) || 50,
   wcOrderPerPage: Number(process.env.WC_ORDER_PER_PAGE) || 50,
+  orderHotWindowMonths: Number(process.env.ORDER_HOT_WINDOW_MONTHS) || 3,
 
   // Retry settings
   maxRetries: 3,

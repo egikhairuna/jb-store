@@ -79,9 +79,13 @@ export async function syncWooCommerceProducts(): Promise<SyncResult<Product[]>> 
   }
 }
 
+import { syncWooCommerceOrdersIncremental } from "./sync/order-sync";
+
+// ... [existing code] ...
+
 /**
  * Sync orders from WooCommerce
- * HARDENED: Added _fields filtering and capped perPage to reduce load.
+ * REDIRECTED: Now runs incremental sync and returns data from local SQLite DB.
  */
 export async function syncWooCommerceOrders(
   page: number = 1,
@@ -89,85 +93,58 @@ export async function syncWooCommerceOrders(
   status: string = 'completed',
   after?: string
 ): Promise<SyncResult<Order[]>> {
-  const lockResult = await syncLockService.acquireLock('orders');
-  
-  if (!lockResult.success) {
-    return {
-      success: false,
-      error: lockResult.message
-    };
-  }
-
-  const { syncId } = lockResult;
   const startTime = Date.now();
-  const finalPerPage = Math.min(perPage, syncConfig.wcOrderPerPage);
   
-  const log = (msg: string) => {
-    console.log(`[${new Date().toLocaleTimeString()}] [OrderSync] [${syncId}] ${msg}`);
-  };
-
   try {
-    log(`Fetching orders (page ${page}, per_page: ${finalPerPage}, status: ${status}, after: ${after || 'initial'})...`);
+    console.log(`[OrderSyncService] Starting redirected order sync...`);
     
-    const params: any = {
-      per_page: finalPerPage,
-      page,
-      status,
-      _fields: "id,date_created,total,total_tax,discount_total,payment_method_title,line_items,meta_data,status"
-    };
-
-    if (after) {
-      params.after = after;
+    // 1. Trigger the incremental sync + prune
+    const syncResult = await syncWooCommerceOrdersIncremental();
+    
+    if (!syncResult.success) {
+      return {
+        success: false,
+        error: syncResult.error,
+        duration: Date.now() - startTime
+      };
     }
 
-    const response = await fetchWithExponentialBackoff(`Fetch orders page ${page}`, () => 
-      api.get("orders", params)
-    );
+    // 2. Fetch recent orders from local SQLite to return to the client
+    // We return 'hot' data (recent 100) to refresh the UI view
+    const dbOrders = await prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
 
-    const orders: Order[] = (response.data || []).map((order: any) => ({
-      id: String(order.id),
-      date: order.date_created,
-      items: (order.line_items || []).map((item: any) => ({
-        id: String(item.product_id),
-        name: item.name,
-        price: item.price ? parseFloat(item.price) : 0,
-        quantity: item.quantity,
-        sku: item.sku || '',
-        type: item.variation_id ? 'variable' : 'simple',
-        stock: 0,
-        variantId: item.variation_id ? String(item.variation_id) : undefined,
-        variantName: item.meta_data?.find((m: any) => m.key === 'pa_color' || m.key === 'pa_size')?.value || '',
-      })),
-      total: parseFloat(order.total || "0"),
-      subtotal: parseFloat(order.total || "0") - parseFloat(order.total_tax || "0"),
-      tax: parseFloat(order.total_tax || "0"),
-      discount: parseFloat(order.discount_total || "0"),
-      paymentMethod: order.payment_method_title,
-      isPosOrder: order.meta_data?.some((m: any) => m.key === 'pos_order_id'),
-      posOrderId: order.meta_data?.find((m: any) => m.key === 'pos_order_id')?.value
+    const mappedOrders: Order[] = dbOrders.map(o => ({
+      id: o.posOrderId,
+      date: o.createdAt.toISOString(),
+      items: JSON.parse(o.items),
+      total: o.total,
+      subtotal: o.subtotal,
+      tax: o.taxAmount,
+      discount: o.discountAmount,
+      paymentMethod: o.paymentMethod,
+      isPosOrder: true, // If it's in our DB, we treat it for UI purposes as POS-available
+      posOrderId: o.posOrderId
     }));
 
     const duration = Date.now() - startTime;
-    log(`Fetched ${orders.length} orders in ${(duration / 1000).toFixed(1)}s`);
+    console.log(`[OrderSyncService] ✅ Redirected sync success. Served ${mappedOrders.length} items from DB.`);
 
     return {
       success: true,
-      data: orders,
-      syncId,
-      duration
+      data: mappedOrders,
+      duration,
+      syncId: syncResult.syncId
     };
 
   } catch (error: any) {
-    const duration = Date.now() - startTime;
-    log(`Sync failed after ${(duration / 1000).toFixed(1)}s: ${error.message}`);
-    
+    console.error(`[OrderSyncService] ❌ Failed: ${error.message}`);
     return {
       success: false,
-      error: error.message || 'Unknown error occurred',
-      syncId,
-      duration
+      error: error.message,
+      duration: Date.now() - startTime
     };
-  } finally {
-    if (syncId) await syncLockService.releaseLock('orders', syncId);
   }
 }

@@ -64,9 +64,19 @@ export default function OrdersPage() {
     const fetchWCOrders = async () => {
         setIsLoading(true)
         try {
-            await fetchDBOrders() // Also refresh DB orders
-            const remoteOrders = await getWooCommerceOrders(1, 100)
-            setWCOrders(remoteOrders)
+            // 1. Trigger the hardened incremental sync + prune via API
+            const syncResp = await fetch('/api/sync/orders', { method: 'POST' })
+            const syncJson = await syncResp.json()
+            
+            if (!syncJson.success) {
+                console.error("Sync failed:", syncJson.error)
+            }
+
+            // 2. Refresh local DB orders (this pulls the newly synced data)
+            await fetchDBOrders()
+            
+            // 3. Clear the legacy direct-fetch state as data is now served from DB
+            setWCOrders([])
         } catch (error) {
             console.error("Failed to fetch WC orders", error)
         } finally {
