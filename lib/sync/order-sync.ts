@@ -202,8 +202,8 @@ export async function syncWooCommerceOrdersIncremental() {
             updatedAt: new Date(o.date_modified || o.date_created),
           };
   
-          // Deduplicate: online orders use WC prefix, POS orders use their original ID
-          const effectivePosOrderId = posOrderId || `WC-ONLINE-${o.id}`;
+          // online orders use WC ID directly, POS orders use their original human-readable ID
+          const effectivePosOrderId = posOrderId || String(o.id);
   
           await prisma.order.upsert({
             where: { posOrderId: effectivePosOrderId },

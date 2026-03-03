@@ -45,7 +45,7 @@ export async function syncWooCommerceProducts(): Promise<SyncResult<Product[]>> 
     // 2. Fetch all products from local SQLite to return to the client
     // This satisfies the API contract of Returning the full product list for store hydration
     const dbProducts = await prisma.product.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { id: 'desc' }
     });
 
     const mappedProducts: Product[] = dbProducts.map(p => ({
