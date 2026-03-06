@@ -34,7 +34,7 @@ export default function OrdersPage() {
     const fetchDBOrders = useCallback(async () => {
         setIsDbLoading(true)
         try {
-            const resp = await fetch('/api/orders')
+            const resp = await fetch('/api/orders', { cache: 'no-store' })
             if (resp.ok) {
                 const json = await resp.json()
                 if (json.success) {

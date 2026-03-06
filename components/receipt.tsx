@@ -38,9 +38,6 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(({ order }, ref)
               })}
           </div>
           <div>Order ID: {order.id}</div>
-          {order.cashierName && order.cashierName.trim() !== "" && (
-            <div className="uppercase">Cashier: {order.cashierName}</div>
-          )}
       </div>
 
 
@@ -99,21 +96,6 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(({ order }, ref)
               <span>{formatIDR(order.total)}</span>
           </div>
       </div>
-
-      <div className="receipt-divider"></div>
-      
-      {order.paymentMethod === 'cash' && order.cashAmount && (
-           <div className="receipt-payment">
-               <div className="line-item">
-                   <span>Cash</span>
-                   <span>{formatIDR(order.cashAmount)}</span>
-               </div>
-               <div className="line-item">
-                   <span>Change</span>
-                   <span>{formatIDR(order.cashAmount - order.total)}</span>
-               </div>
-           </div>
-       )}
        
       <div className="receipt-footer flex flex-col items-center">
           <p className="mb-2">Thank you!</p>
