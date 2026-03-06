@@ -243,12 +243,14 @@ export default function POSPage() {
                     variation_id: item.variantId ? parseInt(item.variantId) : undefined
                 }));
 
-                const woocommerceOrder = {
+                const woocommerceOrder: any = {
                     payment_method: paymentMethod === 'split' ? 'other' : (paymentMethod === 'cash' ? 'cod' : 'bacs'),
                     payment_method_title: paymentMethod === 'split' ? 'Split Payment' : (paymentMethod === 'cash' ? 'Cash' : 'Direct Bank Transfer'),
                     set_paid: true,
                     customer_id: selectedCustomer ? selectedCustomer.id : 0,
-                    customer_note: orderNote,
+                    customer_note: paymentMethod === 'split' 
+                        ? `${orderNote ? orderNote + ' | ' : ''}Split Payment: Cash (${formatIDR(splitCash)}) + Transfer (${formatIDR(splitTransfer)})`
+                        : orderNote,
                     billing: selectedCustomer ? {
                         first_name: selectedCustomer.firstName,
                         last_name: selectedCustomer.lastName,
@@ -259,6 +261,13 @@ export default function POSPage() {
                         email: 'pos@store.com'
                     },
                     line_items,
+                    fee_lines: discountAmount > 0 ? [
+                        {
+                            name: "POS Discount",
+                            total: `-${discountAmount.toFixed(2)}`,
+                            tax_status: "none"
+                        }
+                    ] : [],
                     status: 'completed',
                     meta_data: [
                         { key: 'pos_order_id', value: orderId },
