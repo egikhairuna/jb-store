@@ -333,6 +333,8 @@ export default function POSPage() {
                     taxAmount: tax,
                     total,
                     paymentMethod,
+                    cashAmount: paymentMethod === 'split' ? splitCash : (paymentMethod === 'cash' ? total : 0),
+                    transferAmount: paymentMethod === 'split' ? splitTransfer : (paymentMethod === 'transfer' ? total : 0),
                     syncStatus: (order.syncStatus || 'pending').toUpperCase() // PENDING, SYNCED, FAILED
                 })
             });
@@ -351,7 +353,12 @@ export default function POSPage() {
         // STEP 6: SAVE TO ZUSTAND (FOR UI)
         // ========================================
         console.log('[Checkout] Step 5: Saving to local state...');
-        const finalOrder = { ...order, id: finalOrderId }
+        const finalOrder = { 
+            ...order, 
+            id: finalOrderId,
+            cashAmount: order.cashAmount ?? (paymentMethod === 'split' ? splitCash : (paymentMethod === 'cash' ? total : 0)),
+            transferAmount: order.transferAmount ?? (paymentMethod === 'split' ? splitTransfer : (paymentMethod === 'transfer' ? total : 0))
+        }
 
         addOrder(finalOrder)
         setLastOrder(finalOrder)

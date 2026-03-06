@@ -94,6 +94,8 @@ model Order {
   taxAmount      Float      @default(0)
   total          Float
   paymentMethod  String
+  cashAmount     Float?
+  transferAmount Float?
   syncStatus     String     @default("PENDING")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt

@@ -117,7 +117,7 @@ export async function syncWooCommerceOrders(
     });
 
     const mappedOrders: Order[] = dbOrders.map(o => ({
-      id: o.posOrderId,
+      id: o.wcOrderId || o.posOrderId,
       date: o.createdAt.toISOString(),
       items: JSON.parse(o.items),
       total: o.total,
@@ -125,6 +125,8 @@ export async function syncWooCommerceOrders(
       tax: o.taxAmount,
       discount: o.discountAmount,
       paymentMethod: o.paymentMethod,
+      cashAmount: o.cashAmount || undefined,
+      transferAmount: o.transferAmount || undefined,
       isPosOrder: true, // If it's in our DB, we treat it for UI purposes as POS-available
       posOrderId: o.posOrderId
     }));

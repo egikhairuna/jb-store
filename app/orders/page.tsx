@@ -39,7 +39,8 @@ export default function OrdersPage() {
                 if (json.success) {
                     // Match the store Order type mapping if needed
                     const dbOrders = json.data.map((o: any) => ({
-                        id: o.posOrderId, // Use posOrderId as the display ID
+                        id: o.wcOrderId || o.posOrderId, // Prioritize WC ID for display
+                        posOrderId: o.posOrderId, // Keep original POS ID for internal logic
                         dbId: o.id, // Keep internal DB ID
                         date: o.createdAt,
                         items: o.items,
@@ -48,6 +49,8 @@ export default function OrdersPage() {
                         tax: o.taxAmount,
                         discount: o.discountAmount,
                         paymentMethod: o.paymentMethod,
+                        cashAmount: o.cashAmount,
+                        transferAmount: o.transferAmount,
                         syncStatus: o.syncStatus.toLowerCase(),
                         cashierName: o.cashier?.name || o.cashier?.email || 'Staff'
                     }))

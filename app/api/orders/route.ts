@@ -25,6 +25,8 @@ export async function POST(req: Request) {
       taxAmount,
       total,
       paymentMethod,
+      cashAmount,
+      transferAmount,
       syncStatus,
     } = body;
 
@@ -66,6 +68,8 @@ export async function POST(req: Request) {
         taxAmount: parseFloat(taxAmount || 0),
         total: parseFloat(total),
         paymentMethod: paymentMethod || "cash",
+        cashAmount: parseFloat(cashAmount || 0),
+        transferAmount: parseFloat(transferAmount || 0),
         syncStatus: syncStatus || "PENDING",
       },
     });
@@ -81,6 +85,8 @@ export async function POST(req: Request) {
           total: order.total,
           wcOrderId: order.wcOrderId,
           paymentMethod: order.paymentMethod,
+          cashAmount: order.cashAmount,
+          transferAmount: order.transferAmount,
           discountAmount: numericDiscount,
           discountType // helpful context
         }),

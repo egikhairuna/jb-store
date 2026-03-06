@@ -219,6 +219,8 @@ export async function syncWooCommerceOrdersIncremental() {
             taxAmount: parseFloat(o.total_tax || "0"),
             total: parseFloat(o.total || "0"),
             paymentMethod: o.payment_method_title || o.payment_method || 'unknown',
+            cashAmount: parseFloat(o.meta_data?.find((m: any) => m.key === 'pos_cash_amount')?.value || "0"),
+            transferAmount: parseFloat(o.meta_data?.find((m: any) => m.key === 'pos_transfer_amount')?.value || "0"),
             syncStatus: 'SYNCED',
             createdAt: wcDate, // Preserve Original WC Date (Explicit UTC)
             updatedAt: new Date((o.date_modified_gmt || o.date_modified || o.date_created_gmt || o.date_created || new Date().toISOString()) + "Z"),
