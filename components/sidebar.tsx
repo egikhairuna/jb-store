@@ -35,7 +35,7 @@ export function Sidebar() {
   const [time, setTime] = useState(new Date())
   const [mounted, setMounted] = useState(false)
   const setProducts = useStore((state) => state.setProducts)
-  const setWCOrders = useStore((state) => state.setWCOrders)
+  const setOrders = useStore((state) => state.setOrders)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
@@ -60,11 +60,30 @@ export function Sidebar() {
       }
 
       // Sync orders
-      const ordersRes = await fetch('/api/sync/orders', { method: 'POST' })
+      await fetch('/api/sync/orders', { method: 'POST' })
+      
+      // Refresh local orders from DB (this pulls the newly synced data)
+      const ordersRes = await fetch('/api/orders')
       const ordersData = await ordersRes.json()
       
       if (ordersData.success && ordersData.data) {
-        setWCOrders(ordersData.data)
+        const mappedOrders = ordersData.data.map((o: any) => ({
+          id: o.wcOrderId || o.posOrderId,
+          posOrderId: o.posOrderId,
+          dbId: o.id,
+          date: o.createdAt,
+          items: o.items,
+          total: o.total,
+          subtotal: o.subtotal,
+          tax: o.taxAmount,
+          discount: o.discountAmount,
+          paymentMethod: o.paymentMethod,
+          cashAmount: o.cashAmount,
+          transferAmount: o.transferAmount,
+          syncStatus: o.syncStatus.toLowerCase(),
+          cashierName: o.cashier?.name || o.cashier?.email || 'Staff'
+        }))
+        setOrders(mappedOrders)
       }
 
       setSyncStatus('success')

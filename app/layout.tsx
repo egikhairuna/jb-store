@@ -4,6 +4,7 @@ import "./globals.css";
 import { SidebarWrapper } from "@/components/sidebar-wrapper";
 import { AuthProvider } from "@/components/auth-provider";
 import { BackgroundOrderWorker } from "@/components/background-order-worker";
+import { SyncOnLogin } from "@/components/sync-on-login";
 
 const inter = Inter({ subsets: ["latin"] });
 const courierPrime = Courier_Prime({
@@ -26,6 +27,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} ${courierPrime.variable}`}>
         <AuthProvider>
+          <SyncOnLogin />
           <BackgroundOrderWorker />
           <div className="flex h-screen w-full overflow-hidden bg-background">
             <SidebarWrapper />

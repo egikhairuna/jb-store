@@ -137,8 +137,16 @@ export async function GET() {
     // 🔒 Security check
     const user = await requireRole(["CASHIER", "ADMIN"]);
     
-    // Admins see everything, cashiers see their own sales
-    const where = user.role === "ADMIN" ? {} : { cashierId: user.id };
+    // Admins see everything
+    // Cashiers see their own sales OR any order that was synced from WC (since those belong to the store)
+    const where = user.role === "ADMIN" 
+      ? {} 
+      : { 
+          OR: [
+            { cashierId: user.id },
+            { syncStatus: "SYNCED" }
+          ]
+        };
 
     const orders = await prisma.order.findMany({
       where,
