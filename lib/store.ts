@@ -43,6 +43,7 @@ export interface Order {
   posOrderId?: string
   syncStatus?: 'synced' | 'pending' | 'failed'
   cashierName?: string // Name of the logged-in cashier who created the order
+  source?: 'POS' | 'WooCommerce'
 }
 
 interface AppState {

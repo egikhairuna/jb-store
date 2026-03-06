@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession, signOut } from "next-auth/react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { LayoutDashboard, ShoppingCart, Package, Barcode, Warehouse, FileText, RefreshCw, ClipboardList, Loader2, Sun, Moon, LogOut, Users, User, Settings, Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -67,22 +68,29 @@ export function Sidebar() {
       const ordersData = await ordersRes.json()
       
       if (ordersData.success && ordersData.data) {
-        const mappedOrders = ordersData.data.map((o: any) => ({
-          id: o.wcOrderId || o.posOrderId,
-          posOrderId: o.posOrderId,
-          dbId: o.id,
-          date: o.createdAt,
-          items: o.items,
-          total: o.total,
-          subtotal: o.subtotal,
-          tax: o.taxAmount,
-          discount: o.discountAmount,
-          paymentMethod: o.paymentMethod,
-          cashAmount: o.cashAmount,
-          transferAmount: o.transferAmount,
-          syncStatus: o.syncStatus.toLowerCase(),
-          cashierName: o.cashier?.name || o.cashier?.email || 'Staff'
-        }))
+        const mappedOrders = ordersData.data.map((o: any) => {
+          const isPOS = o.posOrderId && o.posOrderId.startsWith('POS-');
+          const source = isPOS ? 'POS' : 'WooCommerce';
+          const cashierName = source === 'WooCommerce' ? null : (o.cashier?.name || o.cashier?.email || 'Staff');
+          
+          return {
+            id: o.wcOrderId || o.posOrderId,
+            posOrderId: o.posOrderId,
+            dbId: o.id,
+            date: o.createdAt,
+            items: o.items,
+            total: o.total,
+            subtotal: o.subtotal,
+            tax: o.taxAmount,
+            discount: o.discountAmount,
+            paymentMethod: o.paymentMethod,
+            cashAmount: o.cashAmount,
+            transferAmount: o.transferAmount,
+            syncStatus: o.syncStatus.toLowerCase(),
+            cashierName,
+            source
+          }
+        })
         setOrders(mappedOrders)
       }
 
@@ -101,8 +109,14 @@ export function Sidebar() {
       {/* Sidebar Header */}
       <div className="flex h-16 items-center justify-between px-6 border-b">
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-black text-lg shadow-sm group-hover:scale-105 transition-transform">
-            JB
+          <div className="h-9 w-9 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <Image 
+              src="/icon-james.svg" 
+              alt="James Logo" 
+              width={36} 
+              height={36} 
+              className="object-contain"
+            />
           </div>
           <span className="font-bold text-base tracking-tight uppercase">Store</span>
         </Link>

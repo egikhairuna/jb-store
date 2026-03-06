@@ -365,6 +365,7 @@ export default function POSPage() {
         const finalOrder = { 
             ...order, 
             id: finalOrderId,
+            source: 'POS' as const,
             cashAmount: order.cashAmount ?? (paymentMethod === 'split' ? splitCash : (paymentMethod === 'cash' ? total : 0)),
             transferAmount: order.transferAmount ?? (paymentMethod === 'split' ? splitTransfer : (paymentMethod === 'transfer' ? total : 0))
         }

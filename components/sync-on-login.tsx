@@ -38,22 +38,29 @@ export function SyncOnLogin() {
           const ordersData = await ordersRes.json()
           
           if (ordersData.success && ordersData.data) {
-            const mappedOrders = ordersData.data.map((o: any) => ({
-              id: o.wcOrderId || o.posOrderId, // Prioritize WC ID for display
-              posOrderId: o.posOrderId,
-              dbId: o.id,
-              date: o.createdAt,
-              items: o.items,
-              total: o.total,
-              subtotal: o.subtotal,
-              tax: o.taxAmount,
-              discount: o.discountAmount,
-              paymentMethod: o.paymentMethod,
-              cashAmount: o.cashAmount,
-              transferAmount: o.transferAmount,
-              syncStatus: o.syncStatus.toLowerCase(),
-              cashierName: o.cashier?.name || o.cashier?.email || 'Staff'
-            }))
+            const mappedOrders = ordersData.data.map((o: any) => {
+              const isPOS = o.posOrderId && o.posOrderId.startsWith('POS-');
+              const source = isPOS ? 'POS' : 'WooCommerce';
+              const cashierName = source === 'WooCommerce' ? null : (o.cashier?.name || o.cashier?.email || 'Staff');
+              
+              return {
+                id: o.wcOrderId || o.posOrderId, // Prioritize WC ID for display
+                posOrderId: o.posOrderId,
+                dbId: o.id,
+                date: o.createdAt,
+                items: o.items,
+                total: o.total,
+                subtotal: o.subtotal,
+                tax: o.taxAmount,
+                discount: o.discountAmount,
+                paymentMethod: o.paymentMethod,
+                cashAmount: o.cashAmount,
+                transferAmount: o.transferAmount,
+                syncStatus: o.syncStatus.toLowerCase(),
+                cashierName,
+                source
+              }
+            })
             setOrders(mappedOrders)
           }
           console.log("[SyncOnLogin] Auto-sync complete.");

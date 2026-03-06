@@ -38,8 +38,8 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(({ order }, ref)
               })}
           </div>
           <div>Order ID: {order.id}</div>
-          {order.cashierName && (
-            <div>Cashier: {order.cashierName}</div>
+          {order.cashierName && order.cashierName.trim() !== "" && (
+            <div className="uppercase">Cashier: {order.cashierName}</div>
           )}
       </div>
 

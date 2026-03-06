@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subMonths } from "date-fns"
 import { Download, FileSpreadsheet, FileText, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useState, useEffect, useMemo } from "react"
 import {
   DropdownMenu,
@@ -303,10 +304,14 @@ export default function ReportsPage() {
                         {format(new Date(order.date), "MMM dd, yyyy HH:mm")}
                     </TableCell>
                     <TableCell>
-                        {isOnline 
-                            ? <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700">Online</span>
-                            : <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">POS</span>
-                        }
+                        <span className={cn(
+                            "px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                            (order.source === 'POS' || (!order.source && !isOnline)) 
+                                ? "bg-slate-100 text-slate-700 border border-slate-200" 
+                                : "bg-blue-50 text-blue-600 border border-blue-100"
+                        )}>
+                            {order.source || (isOnline ? 'WooCommerce' : 'POS')}
+                        </span>
                     </TableCell>
                     <TableCell>
                         {order.items.map((item, idx) => (

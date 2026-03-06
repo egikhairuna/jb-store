@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Printer, Download, Undo2, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Receipt } from "@/components/receipt"
 import { PrintButton } from "@/components/print-button"
 import html2canvas from "html2canvas"
@@ -38,22 +39,29 @@ export default function OrdersPage() {
                 const json = await resp.json()
                 if (json.success) {
                     // Match the store Order type mapping if needed
-                    const dbOrders = json.data.map((o: any) => ({
-                        id: o.wcOrderId || o.posOrderId, // Prioritize WC ID for display
-                        posOrderId: o.posOrderId, // Keep original POS ID for internal logic
-                        dbId: o.id, // Keep internal DB ID
-                        date: o.createdAt,
-                        items: o.items,
-                        total: o.total,
-                        subtotal: o.subtotal,
-                        tax: o.taxAmount,
-                        discount: o.discountAmount,
-                        paymentMethod: o.paymentMethod,
-                        cashAmount: o.cashAmount,
-                        transferAmount: o.transferAmount,
-                        syncStatus: o.syncStatus.toLowerCase(),
-                        cashierName: o.cashier?.name || o.cashier?.email || 'Staff'
-                    }))
+                    const dbOrders = json.data.map((o: any) => {
+                        const isPOS = o.posOrderId && o.posOrderId.startsWith('POS-');
+                        const source = isPOS ? 'POS' : 'WooCommerce';
+                        const cashierName = source === 'WooCommerce' ? null : (o.cashier?.name || o.cashier?.email || 'Staff');
+                        
+                        return {
+                            id: o.wcOrderId || o.posOrderId, // Prioritize WC ID for display
+                            posOrderId: o.posOrderId, // Keep original POS ID for internal logic
+                            dbId: o.id, // Keep internal DB ID
+                            date: o.createdAt,
+                            items: o.items,
+                            total: o.total,
+                            subtotal: o.subtotal,
+                            tax: o.taxAmount,
+                            discount: o.discountAmount,
+                            paymentMethod: o.paymentMethod,
+                            cashAmount: o.cashAmount,
+                            transferAmount: o.transferAmount,
+                            syncStatus: o.syncStatus.toLowerCase(),
+                            cashierName,
+                            source
+                        }
+                    })
                     setOrders(dbOrders)
                 }
             }
@@ -201,6 +209,7 @@ export default function OrdersPage() {
                         <TableRow>
                             <TableHead>Order ID</TableHead>
                             <TableHead>Date</TableHead>
+                            <TableHead>Source</TableHead>
                             <TableHead>Items</TableHead>
                             <TableHead>Payment Method</TableHead>
                             <TableHead>Total</TableHead>
@@ -219,11 +228,16 @@ export default function OrdersPage() {
                                 <TableRow key={order.id}>
                                     <TableCell className="font-medium">
                                         #{order.id}
-                                        {!order.posOrderId && !orders.find(o => o.id === order.id) && (
-                                            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700">Online</span>
-                                        )}
                                     </TableCell>
                                     <TableCell>{new Date(order.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</TableCell>
+                                    <TableCell>
+                                        <span className={cn(
+                                            "px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                                            order.source === 'POS' ? "bg-slate-100 text-slate-700 border border-slate-200" : "bg-blue-50 text-blue-600 border border-blue-100"
+                                        )}>
+                                            {order.source || 'POS'}
+                                        </span>
+                                    </TableCell>
                                     <TableCell>{order.items.length} items</TableCell>
                                     <TableCell className="capitalize">{order.paymentMethod}</TableCell>
                                     <TableCell>{formatIDR(order.total)}</TableCell>
