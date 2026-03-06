@@ -211,7 +211,7 @@ export default function POSPage() {
         // ========================================
         // STEP 2: CREATE ORDER DATA
         // ========================================
-        const orderId = Math.random().toString(36).substr(2, 9).toUpperCase();
+        const orderId = 'POS-' + Math.random().toString(36).substr(2, 9).toUpperCase();
 
         const order: Order = {
             id: orderId,

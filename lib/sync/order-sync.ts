@@ -186,7 +186,7 @@ export async function syncWooCommerceOrdersIncremental() {
       const perPage = syncConfig.wcOrderPerPage;
       let totalUpdated = 0;
       
-      const orderFields = "id,date_created_gmt,date_modified_gmt,total,total_tax,discount_total,payment_method,payment_method_title,line_items,meta_data,status";
+      const orderFields = "id,date_created_gmt,date_modified_gmt,total,total_tax,discount_total,payment_method,payment_method_title,line_items,fee_lines,meta_data,status";
   
       while (true) {
         log(`Fetching page ${page}...`);
@@ -208,16 +208,28 @@ export async function syncWooCommerceOrdersIncremental() {
   
         for (const o of orders) {
           const posOrderId = o.meta_data?.find((m: any) => m.key === 'pos_order_id')?.value;
-          const subtotal = parseFloat(o.total || "0") - parseFloat(o.total_tax || "0");
+          
+          // Calculate Discount from both WC coupon discount and POS fee-line discounts (negative fees)
+          const wcDiscount = parseFloat(o.discount_total || "0");
+          const feeDiscount = (o.fee_lines || [])
+            .filter((f: any) => parseFloat(f.total) < 0)
+            .reduce((sum: number, f: any) => sum + Math.abs(parseFloat(f.total)), 0);
+          const totalDiscount = wcDiscount + feeDiscount;
+
+          const total = parseFloat(o.total || "0");
+          const tax = parseFloat(o.total_tax || "0");
+          // Subtotal (Original price before discount and tax) = (Total - Tax) + Discount
+          const subtotal = (total - tax) + totalDiscount;
+          
           const wcDate = new Date((o.date_created_gmt || o.date_created || new Date().toISOString()) + "Z");
           
           const orderData = {
             wcOrderId: String(o.id),
             items: JSON.stringify(o.line_items),
             subtotal,
-            discountAmount: parseFloat(o.discount_total || "0"),
-            taxAmount: parseFloat(o.total_tax || "0"),
-            total: parseFloat(o.total || "0"),
+            discountAmount: totalDiscount,
+            taxAmount: tax,
+            total: total,
             paymentMethod: o.payment_method_title || o.payment_method || 'unknown',
             cashAmount: parseFloat(o.meta_data?.find((m: any) => m.key === 'pos_cash_amount')?.value || "0"),
             transferAmount: parseFloat(o.meta_data?.find((m: any) => m.key === 'pos_transfer_amount')?.value || "0"),

@@ -40,7 +40,7 @@ export default function OrdersPage() {
                 if (json.success) {
                     // Match the store Order type mapping if needed
                     const dbOrders = json.data.map((o: any) => {
-                        const isPOS = o.posOrderId && o.posOrderId.startsWith('POS-');
+                        const isPOS = !!o.posOrderId;
                         const source = isPOS ? 'POS' : 'WooCommerce';
                         const cashierName = source === 'WooCommerce' ? null : (o.cashier?.name || o.cashier?.email || 'Staff');
                         

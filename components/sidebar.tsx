@@ -69,7 +69,7 @@ export function Sidebar() {
       
       if (ordersData.success && ordersData.data) {
         const mappedOrders = ordersData.data.map((o: any) => {
-          const isPOS = o.posOrderId && o.posOrderId.startsWith('POS-');
+          const isPOS = !!o.posOrderId;
           const source = isPOS ? 'POS' : 'WooCommerce';
           const cashierName = source === 'WooCommerce' ? null : (o.cashier?.name || o.cashier?.email || 'Staff');
           
